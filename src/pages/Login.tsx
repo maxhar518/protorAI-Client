@@ -30,10 +30,10 @@ const Login = () => {
     try {
       // TODO: Implement actual login logic with Supabase
       console.log("Login data:", data);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       toast({
         title: "Login successful",
         description: "Welcome back to ProtorAi!",
@@ -53,17 +53,19 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-gradient-primary rounded-xl">
-              <Shield className="h-8 w-8 text-white" />
+          <Link to="/">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-gradient-primary rounded-xl">
+                <Shield className="h-8 w-8 text-white" />
+              </div>
             </div>
-          </div>
+          </Link>
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>
             Sign in to your ProtorAi account
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -85,7 +87,7 @@ const Login = () => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="password"
@@ -119,7 +121,7 @@ const Login = () => {
                   </FormItem>
                 )}
               />
-              
+
               <div className="flex items-center justify-between">
                 <Link
                   to="/reset-password"
@@ -128,13 +130,13 @@ const Login = () => {
                   Forgot password?
                 </Link>
               </div>
-              
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
           </Form>
-          
+
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}

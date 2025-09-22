@@ -28,10 +28,10 @@ const ResetPassword = () => {
     try {
       // TODO: Implement actual password reset logic with Supabase
       console.log("Reset password data:", data);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       setEmailSent(true);
       toast({
         title: "Reset email sent",
@@ -53,22 +53,24 @@ const ResetPassword = () => {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="p-3 bg-gradient-primary rounded-xl">
-                <Shield className="h-8 w-8 text-white" />
+            <Link to="/">
+              <div className="flex justify-center mb-4">
+                <div className="p-3 bg-gradient-primary rounded-xl">
+                  <Shield className="h-8 w-8 text-white" />
+                </div>
               </div>
-            </div>
+            </Link>
             <CardTitle className="text-2xl font-bold">Check Your Email</CardTitle>
             <CardDescription>
               We've sent password reset instructions to your email address.
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent className="text-center">
             <p className="text-sm text-muted-foreground mb-6">
               Didn't receive the email? Check your spam folder or try again.
             </p>
-            
+
             <div className="space-y-3">
               <Button
                 onClick={() => setEmailSent(false)}
@@ -77,7 +79,7 @@ const ResetPassword = () => {
               >
                 Try Again
               </Button>
-              
+
               <Link to="/login">
                 <Button variant="ghost" className="w-full">
                   <ArrowLeft className="w-4 h-4 mr-2" />
@@ -105,7 +107,7 @@ const ResetPassword = () => {
             Enter your email address and we'll send you a link to reset your password.
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -127,13 +129,13 @@ const ResetPassword = () => {
                   </FormItem>
                 )}
               />
-              
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Sending..." : "Send Reset Link"}
               </Button>
             </form>
           </Form>
-          
+
           <div className="mt-6 text-center">
             <Link to="/login">
               <Button variant="ghost" className="text-sm">

@@ -4,17 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Upload, 
-  FileText, 
-  Shield, 
-  CheckCircle, 
-  AlertCircle, 
-  X, 
+import {
+  Upload,
+  FileText,
+  Shield,
+  CheckCircle,
+  AlertCircle,
+  X,
   Download,
   Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { log } from "console";
 
 interface UploadedFile {
   id: string;
@@ -54,83 +55,73 @@ const PdfUpload = () => {
       status: 'uploading',
       progress: 0,
     };
+    setFiles(prev => [...prev, uploadedFile]);
 
     // Simulate upload progress
     for (let progress = 0; progress <= 100; progress += 10) {
       await new Promise(resolve => setTimeout(resolve, 100));
-      setFiles(prev => prev.map(f => 
-        f.id === fileId ? { ...f, progress } : f
-      ));
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress } : f));
     }
 
     // Change to processing
-    setFiles(prev => prev.map(f => 
-      f.id === fileId ? { ...f, status: 'processing', progress: 0 } : f
-    ));
+    setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing', progress: 0 } : f));
 
     // Simulate processing
     for (let progress = 0; progress <= 100; progress += 20) {
       await new Promise(resolve => setTimeout(resolve, 200));
-      setFiles(prev => prev.map(f => 
-        f.id === fileId ? { ...f, progress } : f
-      ));
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress } : f));
     }
 
-    // Mock analysis results
-    const riskLevels: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
-    const randomRisk = Math.random();
-    const riskLevel = randomRisk > 0.7 ? 'high' : randomRisk > 0.4 ? 'medium' : 'low';
-    
-    const mockResult = {
-      riskLevel: riskLevel as 'low' | 'medium' | 'high',
-      detectedIssues: [
-        'Potential unauthorized content detected',
-        'Suspicious formatting patterns found',
-        'External references identified'
-      ].slice(0, Math.floor(Math.random() * 3) + 1),
-      confidence: Math.floor(Math.random() * 30) + 70,
-    };
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    const finalFile: UploadedFile = {
-      ...uploadedFile,
-      status: 'completed',
-      progress: 100,
-      parsedText: "This is a sample parsed text from the PDF document. It would contain the actual extracted content in a real implementation.",
-      analysisResult: mockResult,
-    };
+      // Send to backend
+      const response = await fetch("http://localhost:3000/parser/parseDocument", {
+        method: "POST",
+        body: formData,
+      });
 
-    setFiles(prev => prev.map(f => 
-      f.id === fileId ? finalFile : f
-    ));
+      console.log(!response)
+      const result = await response.json();
 
-    return finalFile;
+      const finalFile: UploadedFile = {
+        ...uploadedFile,
+        status: 'completed',
+        progress: 100,
+        parsedText: result.parsedText || '',
+        analysisResult: result.analysisResult || null,
+      };
+
+      setFiles(prev =>
+        prev.map(f => f.id === fileId ? finalFile : f)
+      );
+
+      return finalFile;
+    } catch (error) {
+      console.error(error);
+      setFiles(prev =>
+        prev.map(f => f.id === fileId ? { ...f, status: 'error', progress: 100 } : f)
+      );
+      throw error;
+    }
   };
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
 
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    const pdfFiles = droppedFiles.filter(file => file.type === 'application/pdf');
+    const droppedFiles = await Array.from(e.dataTransfer.files);
+    const pdfFiles = await droppedFiles.filter(file => file.type === 'application/pdf');
 
-    if (pdfFiles.length === 0) {
+    if (!pdfFiles) {
       toast({
         title: "Invalid file type",
-        description: "Please upload PDF files only.",
+        description: "Please upload a PDF file.",
         variant: "destructive",
       });
       return;
     }
-
-    const newFiles = pdfFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-      status: 'uploading' as const,
-      progress: 0,
-    }));
-
-    setFiles(prev => [...prev, ...newFiles]);
 
     // Process each file
     for (const file of pdfFiles) {
@@ -143,7 +134,7 @@ const PdfUpload = () => {
       } catch (error) {
         toast({
           title: "Processing failed",
-          description: `Failed to process ${file.name}.`,
+          description: `Failed to process ${file.name}${error}.`,
           variant: "destructive",
         });
       }
@@ -229,11 +220,10 @@ const PdfUpload = () => {
               </CardHeader>
               <CardContent>
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragOver 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                  }`}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragOver
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                    }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -248,7 +238,6 @@ const PdfUpload = () => {
                   <input
                     type="file"
                     accept=".pdf"
-                    multiple
                     onChange={handleFileInput}
                     className="hidden"
                     id="file-upload"
@@ -284,7 +273,7 @@ const PdfUpload = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">{file.name}</p>
                               <p className="text-sm text-muted-foreground">{file.size}</p>
-                              
+
                               {file.status !== 'completed' && (
                                 <div className="mt-2">
                                   <div className="flex items-center gap-2 mb-1">
@@ -298,7 +287,7 @@ const PdfUpload = () => {
                                   <Progress value={file.progress} className="h-2" />
                                 </div>
                               )}
-                              
+
                               {file.status === 'completed' && file.analysisResult && (
                                 <div className="mt-2 flex items-center gap-2">
                                   <Badge variant={getRiskBadgeVariant(file.analysisResult.riskLevel)}>
@@ -311,7 +300,7 @@ const PdfUpload = () => {
                               )}
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-2">
                             {file.status === 'completed' ? (
                               <>
@@ -326,7 +315,7 @@ const PdfUpload = () => {
                             ) : file.status === 'error' ? (
                               <AlertCircle className="h-5 w-5 text-red-500" />
                             ) : null}
-                            
+
                             <Button
                               variant="ghost"
                               size="icon"
@@ -361,7 +350,7 @@ const PdfUpload = () => {
                     </div>
                     <p className="text-sm text-muted-foreground">Documents Analyzed</p>
                   </div>
-                  
+
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
                       <div className="text-lg font-semibold text-green-600">
@@ -382,7 +371,7 @@ const PdfUpload = () => {
                       <p className="text-xs text-muted-foreground">High Risk</p>
                     </div>
                   </div>
-                  
+
                   {files.some(f => f.status === 'processing' || f.status === 'uploading') && (
                     <div className="pt-4 border-t">
                       <p className="text-sm text-muted-foreground mb-2">Processing Queue</p>

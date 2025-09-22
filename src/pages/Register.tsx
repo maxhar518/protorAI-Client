@@ -44,10 +44,10 @@ const Register = () => {
     try {
       // TODO: Implement actual registration logic with Supabase
       console.log("Register data:", data);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       toast({
         title: "Account created successfully",
         description: "Welcome to ProtorAi! Please check your email to verify your account.",
@@ -67,17 +67,19 @@ const Register = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-gradient-primary rounded-xl">
-              <Shield className="h-8 w-8 text-white" />
+          <Link to="/">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-gradient-primary rounded-xl">
+                <Shield className="h-8 w-8 text-white" />
+              </div>
             </div>
-          </div>
+          </Link>
           <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
           <CardDescription>
             Join ProtorAi to secure your examinations
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -98,7 +100,7 @@ const Register = () => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="email"
@@ -117,7 +119,7 @@ const Register = () => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="password"
@@ -151,7 +153,7 @@ const Register = () => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="confirmPassword"
@@ -185,13 +187,13 @@ const Register = () => {
                   </FormItem>
                 )}
               />
-              
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Creating account..." : "Create Account"}
               </Button>
             </form>
           </Form>
-          
+
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
