@@ -4,7 +4,6 @@ import { Upload, FileText, Shield, } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PdfUpload = () => {
-  const [files, setFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const { toast } = useToast();
 
@@ -19,15 +18,6 @@ const PdfUpload = () => {
   }, []);
 
   const processFile = async (file) => {
-    const fileId = Math.random().toString(36).substr(2, 9);
-    const uploadedFile = {
-      id: fileId,
-      name: file.name,
-      size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-      progress: 0,
-    };
-    setFiles(prev => [...prev, uploadedFile]);
-
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -42,24 +32,9 @@ const PdfUpload = () => {
       }
 
       const result = await response.json();
-
-      const finalFile = {
-        ...uploadedFile,
-        progress: 100,
-        parsedText: result?.parsedText || result?.text || 'No text found',
-        parsedQuestion: result?.count ?? null,
-      };
-
-      setFiles(prev =>
-        prev.map(f => f.id === fileId ? finalFile : f)
-      );
-
-      return finalFile;
+      return result;
     } catch (error) {
       console.error(error);
-      setFiles(prev =>
-        prev.map(f => f.id === fileId ? { ...f, status: 'error', progress: 100 } : f)
-      );
       throw error;
     }
   };
@@ -80,7 +55,6 @@ const PdfUpload = () => {
       return;
     }
 
-    // Process each file
     for (const file of pdfFiles) {
       try {
         await processFile(file);
@@ -97,10 +71,6 @@ const PdfUpload = () => {
       }
     }
   }, [toast]);
-
-  const removeFile = (fileId: string) => {
-    setFiles(prev => prev.filter(f => f.id !== fileId));
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted">
@@ -142,15 +112,11 @@ const PdfUpload = () => {
                     }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
+                  onDrop={handleDrop}>
                   <div className="mx-auto w-12 h-12 mb-4 text-muted-foreground">
                     <FileText className="w-full h-full" />
                   </div>
                   <h3 className="text-lg font-semibold mb-2">Drop PDF files here</h3>
-                  <p className="text-muted-foreground mb-4">
-                    or click to browse from your computer
-                  </p>
                 </div>
               </CardContent>
             </Card>
