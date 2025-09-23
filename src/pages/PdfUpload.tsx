@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Upload,
   FileText,
@@ -20,8 +21,8 @@ interface UploadedFile {
   size: string;
   status: 'uploading' | 'processing' | 'completed' | 'error';
   progress: number;
-  parsedText?: string[];
-  parsedQuestion?: number,
+  parsedText?: string;
+  parsedQuestion?: number;
   analysisResult?: {
     riskLevel: 'low' | 'medium' | 'high';
     detectedIssues: string[];
@@ -32,6 +33,8 @@ interface UploadedFile {
 const PdfUpload = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -80,14 +83,17 @@ const PdfUpload = () => {
         body: formData,
       });
 
-      const result = await response.json();
-      console.log(result)
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
 
+      const result = await response.json();
+      
       const finalFile: UploadedFile = {
         ...uploadedFile,
         status: 'completed',
         progress: 100,
-        parsedText: result?.parsedText[0].question,
+        parsedText: result?.parsedText || result?.text || 'No text found',
         parsedQuestion: result?.count ?? null,
         analysisResult: result?.analysisResult ?? null,
       };
@@ -174,6 +180,11 @@ const PdfUpload = () => {
 
   const removeFile = (fileId: string) => {
     setFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const viewParsedText = (file: UploadedFile) => {
+    setSelectedFile(file);
+    setIsDialogOpen(true);
   };
 
   return (
@@ -283,7 +294,7 @@ const PdfUpload = () => {
                           <div className="flex items-center gap-2">
                             {file.status === 'completed' ? (
                               <>
-                                <Button variant="ghost" size="icon" onClick={() => { console.log(file.parsedText) }}>
+                                <Button variant="ghost" size="icon" onClick={() => viewParsedText(file)}>
                                   <Eye className="h-4 w-4" />
                                 </Button>
                                 <CheckCircle className="h-5 w-5 text-green-500" />
@@ -310,6 +321,28 @@ const PdfUpload = () => {
           </div>
         </div>
       </div>
+
+      {/* Parsed Text Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Parsed Text: {selectedFile?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] w-full rounded border p-4">
+            <div className="whitespace-pre-wrap text-sm">
+              {selectedFile?.parsedText || 'No text content available'}
+            </div>
+          </ScrollArea>
+          {selectedFile?.parsedQuestion && (
+            <div className="text-sm text-muted-foreground">
+              Total questions found: {selectedFile.parsedQuestion}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
