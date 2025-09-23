@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Upload,
@@ -11,11 +10,9 @@ import {
   CheckCircle,
   AlertCircle,
   X,
-  Download,
   Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { log } from "console";
 
 interface UploadedFile {
   id: string;
@@ -23,7 +20,8 @@ interface UploadedFile {
   size: string;
   status: 'uploading' | 'processing' | 'completed' | 'error';
   progress: number;
-  parsedText?: string;
+  parsedText?: string[];
+  parsedQuestion?: number,
   analysisResult?: {
     riskLevel: 'low' | 'medium' | 'high';
     detectedIssues: string[];
@@ -82,15 +80,16 @@ const PdfUpload = () => {
         body: formData,
       });
 
-      console.log(!response)
       const result = await response.json();
+      console.log(result)
 
       const finalFile: UploadedFile = {
         ...uploadedFile,
         status: 'completed',
         progress: 100,
-        parsedText: result.parsedText || '',
-        analysisResult: result.analysisResult || null,
+        parsedText: result?.parsedText[0].question,
+        parsedQuestion: result?.count ?? null,
+        analysisResult: result?.analysisResult ?? null,
       };
 
       setFiles(prev =>
@@ -111,8 +110,8 @@ const PdfUpload = () => {
     e.preventDefault();
     setIsDragOver(false);
 
-    const droppedFiles = await Array.from(e.dataTransfer.files);
-    const pdfFiles = await droppedFiles.filter(file => file.type === 'application/pdf');
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const pdfFiles = droppedFiles.filter(file => file.type === 'application/pdf');
 
     if (!pdfFiles) {
       toast({
@@ -134,7 +133,7 @@ const PdfUpload = () => {
       } catch (error) {
         toast({
           title: "Processing failed",
-          description: `Failed to process ${file.name}${error}.`,
+          description: `Failed to process ${file.name}.`,
           variant: "destructive",
         });
       }
@@ -175,15 +174,6 @@ const PdfUpload = () => {
 
   const removeFile = (fileId: string) => {
     setFiles(prev => prev.filter(f => f.id !== fileId));
-  };
-
-  const getRiskBadgeVariant = (riskLevel: string) => {
-    switch (riskLevel) {
-      case 'high': return 'destructive';
-      case 'medium': return 'secondary';
-      case 'low': return 'default';
-      default: return 'default';
-    }
   };
 
   return (
@@ -287,28 +277,14 @@ const PdfUpload = () => {
                                   <Progress value={file.progress} className="h-2" />
                                 </div>
                               )}
-
-                              {file.status === 'completed' && file.analysisResult && (
-                                <div className="mt-2 flex items-center gap-2">
-                                  <Badge variant={getRiskBadgeVariant(file.analysisResult.riskLevel)}>
-                                    {file.analysisResult.riskLevel} risk
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {file.analysisResult.confidence}% confidence
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             {file.status === 'completed' ? (
                               <>
-                                <Button variant="ghost" size="icon">
+                                <Button variant="ghost" size="icon" onClick={() => { console.log(file.parsedText) }}>
                                   <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon">
-                                  <Download className="h-4 w-4" />
                                 </Button>
                                 <CheckCircle className="h-5 w-5 text-green-500" />
                               </>
@@ -331,58 +307,6 @@ const PdfUpload = () => {
                 </CardContent>
               </Card>
             )}
-          </div>
-
-          {/* Analysis Summary */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Analysis Summary</CardTitle>
-                <CardDescription>
-                  Overview of your document analysis results.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-primary">
-                      {files.filter(f => f.status === 'completed').length}
-                    </div>
-                    <p className="text-sm text-muted-foreground">Documents Analyzed</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-lg font-semibold text-green-600">
-                        {files.filter(f => f.analysisResult?.riskLevel === 'low').length}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Low Risk</p>
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold text-yellow-600">
-                        {files.filter(f => f.analysisResult?.riskLevel === 'medium').length}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Medium Risk</p>
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold text-red-600">
-                        {files.filter(f => f.analysisResult?.riskLevel === 'high').length}
-                      </div>
-                      <p className="text-xs text-muted-foreground">High Risk</p>
-                    </div>
-                  </div>
-
-                  {files.some(f => f.status === 'processing' || f.status === 'uploading') && (
-                    <div className="pt-4 border-t">
-                      <p className="text-sm text-muted-foreground mb-2">Processing Queue</p>
-                      <div className="text-lg font-semibold">
-                        {files.filter(f => f.status === 'processing' || f.status === 'uploading').length} files
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
