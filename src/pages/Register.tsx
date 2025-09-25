@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, redirect } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,16 +42,27 @@ const Register = () => {
 
     setIsLoading(true);
     try {
-      // TODO: Implement actual registration logic with Supabase
-      console.log("Register data:", data);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      toast({
-        title: "Account created successfully",
-        description: "Welcome to ProtorAi! Please check your email to verify your account.",
+      const response = await fetch('http://localhost:3000/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username: data.name, email: data.email, password: data.password })
       });
+
+      const dataa = await response.json();
+      form.reset()
+      if (dataa?.success) {
+        toast({
+          title: "Account created successfully",
+          description: "Welcome to ProtorAi! Please check your email to verify your account.",
+        });
+      } else {
+        toast({
+          title: "Registration failed",
+          description: dataa?.message || "An unexpected error occurred.",
+        });
+      }
     } catch (error) {
       toast({
         title: "Registration failed",

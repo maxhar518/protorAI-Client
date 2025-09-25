@@ -1,11 +1,14 @@
-import { useState, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useCallback, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Upload, FileText, Shield, } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PdfUpload = () => {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [fileResult, setFileResult] = useState(null);
   const { toast } = useToast();
+  const fileInputRef = useRef(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -16,28 +19,6 @@ const PdfUpload = () => {
     e.preventDefault();
     setIsDragOver(false);
   }, []);
-
-  const processFile = async (file) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("http://localhost:3000/parser/parseDocument", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
-  };
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -72,6 +53,50 @@ const PdfUpload = () => {
     }
   }, [toast]);
 
+  const handleButtonClick = () => {
+    fileInputRef.current.click(); // Trigger hidden file input
+  };
+
+  const handleFileChange = useCallback(async (e) => {
+    e.preventDefault();
+    const file = e.target.files[0]
+    try {
+      await processFile(file)
+      toast({
+        title: "File processed successfully",
+        description: `${file.name} has been Upload & Parsed successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Processing failed",
+        description: `Failed to process ${file.name}.`,
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const processFile = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("http://localhost:3000/parser/parseDocument", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setFileResult(result)
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted">
       {/* Header */}
@@ -100,9 +125,9 @@ const PdfUpload = () => {
                   <Upload className="h-5 w-5" />
                   Upload PDF Documents
                 </CardTitle>
-                <CardDescription>
+                <CardHeader>
                   Drop your PDF files here or click to browse. Maximum file size: 10MB.
-                </CardDescription>
+                </CardHeader>
               </CardHeader>
               <CardContent>
                 <div
@@ -117,8 +142,42 @@ const PdfUpload = () => {
                     <FileText className="w-full h-full" />
                   </div>
                   <h3 className="text-lg font-semibold mb-2">Drop PDF files here</h3>
+                  <div>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      style={{ display: 'none' }}
+                    />
+                    <Button onClick={handleButtonClick}>
+                      Upload PDF
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-2">
+            <Card className="pl-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {fileResult?.message}
+                </CardTitle>
+              </CardHeader>
+              {fileResult?.parsedText?.map((item, index) => (
+                <div key={index}>
+                  <br />
+                  <h2> <strong>{item.question}</strong>
+                    <hr />
+                  </h2>
+                  <ul>
+                    {item.options?.map((option, i) => (
+                      <li key={i}>{option}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </Card>
           </div>
         </div>

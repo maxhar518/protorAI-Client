@@ -26,25 +26,35 @@ const ResetPassword = () => {
   const onSubmit = async (data: ResetPasswordFormData) => {
     setIsLoading(true);
     try {
-      // TODO: Implement actual password reset logic with Supabase
-      console.log("Reset password data:", data);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      setEmailSent(true);
-      toast({
-        title: "Reset email sent",
-        description: "Check your email for password reset instructions.",
+      const response = await fetch(`http://localhost:3000/auth/resetPassword`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem(localStorage?.token)}`
+        },
+        body: JSON.stringify({ email: data.email }),
       });
+
+      const dataa = await response.json();
+      if (dataa?.success) {
+        toast({
+          title: "Account created successfully",
+          description: "Welcome to ProtorAi! Please check your email to verify your account.",
+        });
+      } else {
+        toast({
+          title: "login failed",
+          description: "An unexpected error occurred.",
+        });
+      }
     } catch (error) {
       toast({
-        title: "Reset failed",
-        description: "An error occurred. Please try again.",
+        title: "Login failed",
+        description: "Please check your credentials and try again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+      form.reset()
     }
   };
 

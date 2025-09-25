@@ -24,20 +24,32 @@ const Login = () => {
       password: "",
     },
   });
-
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      // TODO: Implement actual login logic with Supabase
-      console.log("Login data:", data);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      toast({
-        title: "Login successful",
-        description: "Welcome back to ProtorAi!",
+      const response = await fetch('http://localhost:3000/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: data.email, password: data.password })
       });
+
+      const dataa = await response.json();
+      form.reset()
+      
+      if (dataa?.success) {
+        localStorage.setItem("token", dataa.token);
+        toast({
+          title: "Account created successfully",
+          description: "Welcome to ProtorAi! Please check your email to verify your account.",
+        });
+      } else {
+        toast({
+          title: "login failed",
+          description: "An unexpected error occurred.",
+        });
+      }
     } catch (error) {
       toast({
         title: "Login failed",
