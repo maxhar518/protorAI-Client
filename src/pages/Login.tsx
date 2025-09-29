@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ interface LoginFormData {
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const Navigate = useNavigate()
   const { toast } = useToast();
 
   const form = useForm<LoginFormData>({
@@ -37,12 +38,13 @@ const Login = () => {
 
       const dataa = await response.json();
       form.reset()
-      
+
       if (dataa?.success) {
         localStorage.setItem("token", dataa.token);
+        Navigate('/')
         toast({
-          title: "Account created successfully",
-          description: "Welcome to ProtorAi! Please check your email to verify your account.",
+          title: "Login successful",
+          description: "Welcome back to ProtorAi!",
         });
       } else {
         toast({

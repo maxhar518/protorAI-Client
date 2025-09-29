@@ -33,16 +33,36 @@ const Quiz = () => {
   const fetchQuizData = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("http://localhost:3000/api/quiz");
-      
+      const token = localStorage.getItem('token');
+
+      const response = await fetch("http://localhost:3000/exam", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        }
+      });
+
       if (!response.ok) {
+        if (response.status === 401) {
+          toast({
+            title: "UnAuthorized",
+            description: "Please Login first.",
+            variant: "destructive",
+          });
+        }
         throw new Error(`API Error: ${response.status}`);
       }
 
       const data = await response.json();
-      setQuizData(data);
+      if (data.success) {
+        setQuizData(data);
+        toast({
+          title: "Quiz Started",
+          description: data.message || "Best of luck",
+        });
+      }
     } catch (error) {
-      console.error("Failed to fetch quiz data:", error);
       toast({
         title: "Error",
         description: "Failed to load quiz data. Please try again.",
@@ -94,15 +114,14 @@ const Quiz = () => {
 
   const getAnswerFeedback = (questionIndex: number) => {
     if (!isSubmitted || !quizData) return null;
-    
+
     const question = quizData.parsedText[questionIndex];
     const selectedAnswer = selectedAnswers[questionIndex];
     const isCorrect = selectedAnswer === question.answer;
 
     return (
-      <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${
-        isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-      }`}>
+      <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`}>
         {isCorrect ? (
           <CheckCircle className="h-5 w-5" />
         ) : (
@@ -170,7 +189,7 @@ const Quiz = () => {
               </p>
             </div>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="mt-4">
             <Progress value={progress} className="h-2" />
@@ -194,18 +213,17 @@ const Quiz = () => {
             >
               {currentQuestion.options.map((option, index) => (
                 <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem 
-                    value={option} 
+                  <RadioGroupItem
+                    value={option}
                     id={`option-${index}`}
                     className={isSubmitted && option === currentQuestion.answer ? 'border-green-500' : ''}
                   />
-                  <Label 
-                    htmlFor={`option-${index}`} 
-                    className={`cursor-pointer ${
-                      isSubmitted && option === currentQuestion.answer 
-                        ? 'text-green-600 font-medium' 
-                        : ''
-                    }`}
+                  <Label
+                    htmlFor={`option-${index}`}
+                    className={`cursor-pointer ${isSubmitted && option === currentQuestion.answer
+                      ? 'text-green-600 font-medium'
+                      : ''
+                      }`}
                   >
                     {option}
                   </Label>
@@ -256,13 +274,12 @@ const Quiz = () => {
             <CardContent className="p-6">
               <div className="text-center">
                 <h3 className="text-2xl font-bold mb-2">Quiz Complete!</h3>
-                <div className={`text-4xl font-bold mb-2 ${
-                  score >= 70 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600'
-                }`}>
+                <div className={`text-4xl font-bold mb-2 ${score >= 70 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
                   {score.toFixed(1)}%
                 </div>
                 <p className="text-muted-foreground">
-                  You got {Object.values(selectedAnswers).filter((answer, index) => 
+                  You got {Object.values(selectedAnswers).filter((answer, index) =>
                     answer === quizData.parsedText[index].answer
                   ).length} out of {quizData.parsedText.length} questions correct.
                 </p>

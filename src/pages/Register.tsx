@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, redirect } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const Navigate = useNavigate()
   const { toast } = useToast();
 
   const form = useForm<RegisterFormData>({
@@ -47,20 +48,21 @@ const Register = () => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ username: data.name, email: data.email, password: data.password })
+        body: JSON.stringify({ name: data.name, email: data.email, password: data.password })
       });
 
       const dataa = await response.json();
-      form.reset()
       if (dataa?.success) {
+        form.reset()
         toast({
           title: "Account created successfully",
-          description: "Welcome to ProtorAi! Please check your email to verify your account.",
+          description: "Welcome to ProtorAi! Please Login to Access your account.",
         });
+        Navigate('/login')
       } else {
         toast({
           title: "Registration failed",
-          description: dataa?.message || "An unexpected error occurred.",
+          description: "An unexpected error occurred.",
         });
       }
     } catch (error) {

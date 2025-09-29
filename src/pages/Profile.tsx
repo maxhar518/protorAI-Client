@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useForm } from "react-hook-form";
 import { Shield, User, Settings, Eye, EyeOff, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { json } from "stream/consumers";
 
 interface ProfileFormData {
   name: string;
@@ -29,14 +30,14 @@ const Profile = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
 
-  // Mock user data - replace with actual user data from context/state
-  const [user] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    organization: "University of Technology",
-    phone: "+1 (555) 123-4567",
+  const [user, setUser] = useState({
+    name: "",
+    email: "",
+    organization: "",
+    phone: "",
     avatar: "",
   });
+
 
   const profileForm = useForm<ProfileFormData>({
     defaultValues: {
@@ -54,20 +55,110 @@ const Profile = () => {
       confirmPassword: "",
     },
   });
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchUserData = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({ title: "Login Required", description: "Please log in first.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("http://localhost:3000/user/profile", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            toast({
+              title: "Unauthorized",
+              description: "Please login first.",
+              variant: "destructive",
+            });
+          }
+          throw new Error(`API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(data);
+
+        if (data?.success) {
+          const userInfo = data?.response;
+
+          const updatedUser = {
+            name: userInfo.name || "",
+            email: userInfo.email || "",
+            organization: userInfo?.organication || "",
+            phone: userInfo.phone || "",
+            avatar: userInfo.avatar || "",
+          };
+
+          setUser(updatedUser);
+          profileForm.reset(updatedUser);
+          toast({
+            title: "Success",
+            description: "Profile data fetched successfully.",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: data.message || "Failed to fetch profile.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          toast({
+            title: "Error",
+            description: "Failed to load profile data. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    setIsLoading(true);
+    fetchUserData();
+
+    return () => controller.abort(); // cleanup
+  }, []);
+
 
   const onUpdateProfile = async (data: ProfileFormData) => {
     setIsLoading(true);
     try {
-      // TODO: Implement actual profile update logic with Supabase
-      console.log("Profile update data:", data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully.",
+      const token = localStorage.getItem('token');
+
+      const response = await fetch("http://localhost:3000/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({ email: data.email })
       });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast({
+            title: "UnAuthorized",
+            description: "Please Login first.",
+            variant: "destructive",
+          });
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const dataa = await response.json();
     } catch (error) {
       toast({
         title: "Update failed",
@@ -93,10 +184,10 @@ const Profile = () => {
     try {
       // TODO: Implement actual password update logic with Supabase
       console.log("Password update data:", data);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       passwordForm.reset();
       toast({
         title: "Password updated",
@@ -197,7 +288,7 @@ const Profile = () => {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={profileForm.control}
                         name="email"
@@ -227,7 +318,7 @@ const Profile = () => {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={profileForm.control}
                         name="phone"
