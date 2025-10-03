@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Link, Shield } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Shield, Camera, Mic, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Question {
   question: string;
@@ -23,42 +25,81 @@ const Quiz = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState<number | null>(null);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const [showPermissionWarning, setShowPermissionWarning] = useState(false);
+  const [permissionViolated, setPermissionViolated] = useState(false);
+  const [browserSupported, setBrowserSupported] = useState(true);
   const { toast } = useToast();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [blur, setBlur] = useState(false);
 
   const startMedia = async () => {
     try {
-      if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-        streamRef.current = stream;
-
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        if (audioRef.current) audioRef.current.srcObject = stream;
-
-        const validateTracks = () => {
-          if (!streamRef.current) return;
-          const videoEnabled = streamRef.current.getVideoTracks().some((t) => t.enabled);
-          const audioEnabled = streamRef.current.getAudioTracks().some((t) => t.enabled);
-          setBlur(!videoEnabled || !audioEnabled);
-        };
-
-        validateTracks();
-        intervalRef.current = setInterval(validateTracks, 1000);
-      } else {
-        console.log("getUserMedia not supported");
-        setBlur(true);
+      setPermissionsLoading(true);
+      
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setBrowserSupported(false);
+        setShowPermissionWarning(true);
+        setPermissionsGranted(false);
+        setPermissionsLoading(false);
+        return;
       }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (audioRef.current) audioRef.current.srcObject = stream;
+
+      setPermissionsGranted(true);
+      setShowPermissionWarning(false);
+      setPermissionsLoading(false);
+
+      const validateTracks = () => {
+        if (!streamRef.current) {
+          setPermissionsGranted(false);
+          setShowPermissionWarning(true);
+          if (!isSubmitted) setPermissionViolated(true);
+          return;
+        }
+
+        const videoTracks = streamRef.current.getVideoTracks();
+        const audioTracks = streamRef.current.getAudioTracks();
+        
+        const videoEnabled = videoTracks.some((t) => t.enabled && t.readyState === 'live');
+        const audioEnabled = audioTracks.some((t) => t.enabled && t.readyState === 'live');
+        
+        const bothEnabled = videoEnabled && audioEnabled;
+        setPermissionsGranted(bothEnabled);
+        setShowPermissionWarning(!bothEnabled);
+        
+        if (!bothEnabled && !isSubmitted) {
+          setPermissionViolated(true);
+        }
+      };
+
+      validateTracks();
+      intervalRef.current = setInterval(validateTracks, 2000);
+      
     } catch (error) {
       console.error("Error accessing media devices:", error);
-      setBlur(true);
+      setPermissionsGranted(false);
+      setShowPermissionWarning(true);
+      setPermissionsLoading(false);
+      setPermissionViolated(true);
+      
+      toast({
+        title: "Permission Denied",
+        description: "Camera and microphone access are required for the quiz.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -140,6 +181,24 @@ const Quiz = () => {
 
   const handleSubmit = () => {
     if (!quizData) return;
+    
+    if (permissionViolated) {
+      toast({
+        title: "Submission Blocked",
+        description: "Quiz cannot be submitted due to permission violations during the exam.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!permissionsGranted) {
+      toast({
+        title: "Submission Blocked",
+        description: "Camera and microphone must be active to submit the quiz.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     let correctAnswers = 0;
     quizData.parsedText.forEach((q, i) => {
@@ -178,8 +237,21 @@ const Quiz = () => {
     );
   };
 
-  if (isLoading) {
-    return <div>Loading quiz...</div>;
+  if (isLoading || permissionsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <p className="text-lg font-medium">
+                {permissionsLoading ? "Requesting camera and microphone access..." : "Loading quiz..."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (!quizData?.parsedText?.length) {
@@ -196,9 +268,76 @@ const Quiz = () => {
   const allAnswersSelected = quizData.parsedText.every((_, i) => selectedAnswers[i]);
 
   return (
-    <div className={`min-h-screen ${blur ? "blur-sm pointer-events-none" : ""}`}>
-      <video ref={videoRef} autoPlay playsInline className="hidden" />
-      <audio ref={audioRef} autoPlay className="hidden" />
+    <div className="min-h-screen relative">
+      <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+      <audio ref={audioRef} autoPlay muted className="hidden" />
+
+      {/* Permission Warning Overlay */}
+      {showPermissionWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4 border-2 border-destructive/50 shadow-lg">
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">
+                <div className="p-4 bg-destructive/10 rounded-full">
+                  <AlertTriangle className="h-12 w-12 text-destructive" />
+                </div>
+              </div>
+              <CardTitle className="text-2xl font-bold text-destructive">
+                Access Required
+              </CardTitle>
+              <CardDescription className="text-base mt-2">
+                {!browserSupported 
+                  ? "Your browser doesn't support camera and microphone access."
+                  : "Camera and microphone access are required for exam integrity and proctoring."
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert variant="destructive">
+                <AlertDescription className="flex items-start gap-3">
+                  <div className="flex flex-col gap-2 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Camera className="h-5 w-5" />
+                      <span className="font-medium">Camera Access</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mic className="h-5 w-5" />
+                      <span className="font-medium">Microphone Access</span>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+              
+              {permissionViolated && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    ⚠️ Permission violation detected. Your quiz attempt may be invalidated.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {browserSupported && (
+                <Button 
+                  onClick={startMedia} 
+                  className="w-full bg-destructive hover:bg-destructive/90"
+                  size="lg"
+                >
+                  Grant Permissions
+                </Button>
+              )}
+              
+              {!browserSupported && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Please use a modern browser (Chrome, Firefox, Safari, or Edge) to take this quiz.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Quiz Content with Blur */}
+      <div className={`transition-all duration-300 ${!permissionsGranted ? "blur-lg pointer-events-none" : ""}`}>
 
       <div className="max-w-4xl mx-auto p-4">
         <Card>
@@ -265,6 +404,7 @@ const Quiz = () => {
             </CardHeader>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );
