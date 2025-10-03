@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, Shield, } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -15,43 +15,99 @@ const PdfUpload = () => {
     setIsDragOver(true);
   }, []);
 
+  const processFile = async (file) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({ title: "Login Required", description: "Please log in first.", variant: "destructive" });
+        return;
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("http://localhost:3000/parser/parseDocument", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setFileResult(result)
+      if (result?.success) {
+        toast({
+          title: "Success",
+          description: result.message || "successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Failed.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error(error.message);
+      toast({
+        title: "Error",
+        description: "Failed to load. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragOver(false);
 
-    const droppedFiles = Array.from(e.dataTransfer.files)
-    const pdfFiles = droppedFiles.filter(file => file.type === 'application/pdf');
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      const pdfFiles = droppedFiles.filter(file => file.type === "application/pdf");
 
-    if (pdfFiles.length === 0) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a PDF file.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    for (const file of pdfFiles) {
-      try {
-        await processFile(file);
+      if (pdfFiles.length === 0) {
         toast({
-          title: "File processed successfully",
-          description: `${file.name} has been Upload & Parsed successfully`,
-        });
-      } catch (error) {
-        toast({
-          title: "Processing failed",
-          description: `Failed to process ${file.name}.`,
+          title: "Invalid file type",
+          description: "Please upload a PDF file.",
           variant: "destructive",
         });
+        return;
       }
-    }
-  }, [toast]);
+
+      for (const file of pdfFiles) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast({
+            title: "File too large",
+            description: `${file.name} exceeds 10MB.`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        try {
+          await processFile(file);
+        } catch (error) {
+          console.error(error);
+          toast({
+            title: "Processing failed",
+            description: `Failed to process ${file.name}.`,
+            variant: "destructive",
+          });
+        }
+      }
+    },
+    [toast, processFile]
+  );
 
   const handleButtonClick = () => {
     fileInputRef.current.click(); // Trigger hidden file input
@@ -62,10 +118,6 @@ const PdfUpload = () => {
     const file = e.target.files[0]
     try {
       await processFile(file)
-      toast({
-        title: "File processed successfully",
-        description: `${file.name} has been Upload & Parsed successfully`,
-      });
     } catch (error) {
       toast({
         title: "Processing failed",
@@ -75,27 +127,6 @@ const PdfUpload = () => {
     }
   }, [toast]);
 
-  const processFile = async (file) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("http://localhost:3000/parser/parseDocument", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      setFileResult(result)
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted">
@@ -125,9 +156,9 @@ const PdfUpload = () => {
                   <Upload className="h-5 w-5" />
                   Upload PDF Documents
                 </CardTitle>
-                <CardHeader>
+                <CardDescription>
                   Drop your PDF files here or click to browse. Maximum file size: 10MB.
-                </CardHeader>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div
@@ -150,7 +181,7 @@ const PdfUpload = () => {
                       onChange={handleFileChange}
                       style={{ display: 'none' }}
                     />
-                    <Button onClick={handleButtonClick}>
+                    <Button type="button" onClick={handleButtonClick}>
                       Upload PDF
                     </Button>
                   </div>

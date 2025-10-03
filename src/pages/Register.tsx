@@ -62,7 +62,7 @@ const Register = () => {
       } else {
         toast({
           title: "Registration failed",
-          description: "An unexpected error occurred.",
+          description: dataa.message || "An unexpected error occurred.",
         });
       }
     } catch (error) {

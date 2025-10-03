@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Shield } from "lucide-react";
+import { Menu, X, Shield, LogOut, User } from "lucide-react";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate()
 
   const navLinks = [
     { name: "Home", href: "#home" },
@@ -14,6 +15,13 @@ const Navbar = () => {
     { name: "About", href: "#about" },
     { name: "Contact", href: "#contact" },
   ];
+  const token = localStorage.getItem('token');
+
+  const logout = (e) => {
+    e.preventDefault()
+    localStorage.removeItem('token')
+    navigate('/')
+  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -53,12 +61,23 @@ const Navbar = () => {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <Link to="/login">
-              <Button variant="ghost">Sign In</Button>
-            </Link>
-            <Link to="/register">
-              <Button variant="hero">Get Started</Button>
-            </Link>
+            {token ? (
+              <>
+                <Link to="/Profile">
+                  <User className="h-6 w-6 text-black" />
+                </Link>
+                <LogOut className="h-6 w-6 text-black" onClick={logout} />
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost">Sign In</Button>
+                </Link>
+                <Link to="/register">
+                  <Button variant="hero">Get Started</Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}

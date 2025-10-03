@@ -1,39 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useForm } from "react-hook-form";
-import { Shield, User, Settings, Eye, EyeOff, Upload } from "lucide-react";
+import { Shield, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { json } from "stream/consumers";
 
 interface ProfileFormData {
   name: string;
   email: string;
-  organization: string;
+  Institute: string;
   phone: string;
-}
-
-interface PasswordFormData {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
+  avatar: string;
 }
 
 const Profile = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   const { toast } = useToast();
 
   const [user, setUser] = useState({
     name: "",
     email: "",
-    organization: "",
+    Institute: "",
     phone: "",
     avatar: "",
   });
@@ -43,18 +34,12 @@ const Profile = () => {
     defaultValues: {
       name: user.name,
       email: user.email,
-      organization: user.organization,
+      Institute: user.Institute,
       phone: user.phone,
+      avatar: user.avatar,
     },
   });
 
-  const passwordForm = useForm<PasswordFormData>({
-    defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    },
-  });
   useEffect(() => {
     const controller = new AbortController();
     const fetchUserData = async () => {
@@ -76,28 +61,20 @@ const Profile = () => {
         });
 
         if (!response.ok) {
-          if (response.status === 401) {
-            toast({
-              title: "Unauthorized",
-              description: "Please login first.",
-              variant: "destructive",
-            });
-          }
           throw new Error(`API Error: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log(data);
+        console.log(data?.response);
 
         if (data?.success) {
           const userInfo = data?.response;
-
           const updatedUser = {
             name: userInfo.name || "",
             email: userInfo.email || "",
-            organization: userInfo?.organication || "",
+            Institute: userInfo?.Institute || "",
             phone: userInfo.phone || "",
-            avatar: userInfo.avatar || "",
+            avatar: userInfo.profilePicture || "",
           };
 
           setUser(updatedUser);
@@ -129,89 +106,53 @@ const Profile = () => {
     setIsLoading(true);
     fetchUserData();
 
-    return () => controller.abort(); // cleanup
+    return () => controller.abort();
   }, []);
 
-
-  const onUpdateProfile = async (data: ProfileFormData) => {
-    setIsLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-
-      const response = await fetch("http://localhost:3000/profile", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
-        body: JSON.stringify({ email: data.email })
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          toast({
-            title: "UnAuthorized",
-            description: "Please Login first.",
-            variant: "destructive",
-          });
-        }
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const dataa = await response.json();
-    } catch (error) {
-      toast({
-        title: "Update failed",
-        description: "An error occurred while updating your profile.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
     }
   };
 
-  const onUpdatePassword = async (data: PasswordFormData) => {
-    if (data.newPassword !== data.confirmPassword) {
-      toast({
-        title: "Password mismatch",
-        description: "New passwords do not match.",
-        variant: "destructive",
-      });
+  const handleUploadClick = async () => {
+    if (!selectedFile) return;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast({ title: "Login Required", description: "Please log in first.", variant: "destructive" });
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    try {
-      // TODO: Implement actual password update logic with Supabase
-      console.log("Password update data:", data);
+    const formData = new FormData();
+    formData.append("profilePicture", selectedFile);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const response = await fetch("http://localhost:3000/user/profilePicture", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData,
+    })
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
 
-      passwordForm.reset();
+    const data = await response.json();
+    if (data?.success) {
       toast({
-        title: "Password updated",
-        description: "Your password has been updated successfully.",
+        title: "Success",
+        description: "Profile Picture fetched successfully.",
       });
-    } catch (error) {
+    } else {
       toast({
-        title: "Update failed",
-        description: "An error occurred while updating your password.",
+        title: "Error",
+        description: data.message || "Failed to fetch profile Picture.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
-
-  const handleAvatarUpload = () => {
-    // TODO: Implement avatar upload logic
-    toast({
-      title: "Coming soon",
-      description: "Avatar upload functionality will be available soon.",
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted">
       {/* Header */}
@@ -231,237 +172,102 @@ const Profile = () => {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto p-4 py-8">
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="profile" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Profile
-            </TabsTrigger>
-            <TabsTrigger value="security" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Security
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="profile">
-            <Card>
-              <CardHeader>
-                <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Update your personal information and organization details.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile Information</CardTitle>
+            <CardDescription>
+              Update your personal information and Institute details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Profile Form */}
+            <Form {...profileForm}>
+              <form className="space-y-4">
                 {/* Avatar Section */}
                 <div className="flex items-center gap-6">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={user.avatar} />
-                    <AvatarFallback className="text-lg">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
+                    <AvatarImage src={`http://localhost:3000${user?.avatar}`} />
                   </Avatar>
-                  <div>
-                    <Button onClick={handleAvatarUpload} variant="outline" className="gap-2">
-                      <Upload className="h-4 w-4" />
-                      Upload Photo
-                    </Button>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      JPG, PNG or GIF (max. 2MB)
-                    </p>
+                  {/* File Upload Input */}
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUploadClick}
+                      className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600"
+                    >
+                      Upload Image
+                    </button>
                   </div>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter your full name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                {/* Profile Form */}
-                <Form {...profileForm}>
-                  <form onSubmit={profileForm.handleSubmit(onUpdateProfile)} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={profileForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Full Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter your full name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  <FormField
+                    control={profileForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder="Enter your email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-                      <FormField
-                        control={profileForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="email" placeholder="Enter your email" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="Institute"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Institute</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter your Institute" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={profileForm.control}
-                        name="organization"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Organization</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter your organization" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={profileForm.control}
-                        name="phone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Phone Number</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Enter your phone number" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Updating..." : "Update Profile"}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <CardTitle>Security Settings</CardTitle>
-                <CardDescription>
-                  Update your password to keep your account secure.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...passwordForm}>
-                  <form onSubmit={passwordForm.handleSubmit(onUpdatePassword)} className="space-y-4">
-                    <FormField
-                      control={passwordForm.control}
-                      name="currentPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Current Password</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                type={showCurrentPassword ? "text" : "password"}
-                                placeholder="Enter current password"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                              >
-                                {showCurrentPassword ? (
-                                  <EyeOff className="h-4 w-4" />
-                                ) : (
-                                  <Eye className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={passwordForm.control}
-                      name="newPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>New Password</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                type={showNewPassword ? "text" : "password"}
-                                placeholder="Enter new password"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                onClick={() => setShowNewPassword(!showNewPassword)}
-                              >
-                                {showNewPassword ? (
-                                  <EyeOff className="h-4 w-4" />
-                                ) : (
-                                  <Eye className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={passwordForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Confirm New Password</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                type={showConfirmPassword ? "text" : "password"}
-                                placeholder="Confirm new password"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                              >
-                                {showConfirmPassword ? (
-                                  <EyeOff className="h-4 w-4" />
-                                ) : (
-                                  <Eye className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Updating..." : "Update Password"}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  <FormField
+                    control={profileForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter your phone number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

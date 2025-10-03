@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Link, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Question {
@@ -26,21 +25,62 @@ const Quiz = () => {
   const [score, setScore] = useState<number | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchQuizData();
-  }, []);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [blur, setBlur] = useState(false);
+
+  const startMedia = async () => {
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        streamRef.current = stream;
+
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        if (audioRef.current) audioRef.current.srcObject = stream;
+
+        const validateTracks = () => {
+          if (!streamRef.current) return;
+          const videoEnabled = streamRef.current.getVideoTracks().some((t) => t.enabled);
+          const audioEnabled = streamRef.current.getAudioTracks().some((t) => t.enabled);
+          setBlur(!videoEnabled || !audioEnabled);
+        };
+
+        validateTracks();
+        intervalRef.current = setInterval(validateTracks, 1000);
+      } else {
+        console.log("getUserMedia not supported");
+        setBlur(true);
+      }
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+      setBlur(true);
+    }
+  };
+
+  const cleanupMedia = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
 
   const fetchQuizData = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
 
       const response = await fetch("http://localhost:3000/exam", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
       });
 
       if (!response.ok) {
@@ -62,7 +102,7 @@ const Quiz = () => {
           description: data.message || "Best of luck",
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to load quiz data. Please try again.",
@@ -73,22 +113,28 @@ const Quiz = () => {
     }
   };
 
+  useEffect(() => {
+    fetchQuizData();
+    startMedia();
+    return () => cleanupMedia();
+  }, []);
+
   const handleAnswerSelect = (answer: string) => {
-    setSelectedAnswers(prev => ({
+    setSelectedAnswers((prev) => ({
       ...prev,
-      [currentQuestionIndex]: answer
+      [currentQuestionIndex]: answer,
     }));
   };
 
   const handleNext = () => {
     if (quizData && currentQuestionIndex < quizData.parsedText.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1);
     }
   };
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      setCurrentQuestionIndex((prev) => prev - 1);
     }
   };
 
@@ -96,15 +142,15 @@ const Quiz = () => {
     if (!quizData) return;
 
     let correctAnswers = 0;
-    quizData.parsedText.forEach((question, index) => {
-      if (selectedAnswers[index] === question.answer) {
-        correctAnswers++;
-      }
+    quizData.parsedText.forEach((q, i) => {
+      if (selectedAnswers[i] === q.answer) correctAnswers++;
     });
 
     const calculatedScore = (correctAnswers / quizData.parsedText.length) * 100;
     setScore(calculatedScore);
     setIsSubmitted(true);
+
+    cleanupMedia();
 
     toast({
       title: "Quiz Submitted!",
@@ -115,94 +161,51 @@ const Quiz = () => {
   const getAnswerFeedback = (questionIndex: number) => {
     if (!isSubmitted || !quizData) return null;
 
-    const question = quizData.parsedText[questionIndex];
+    const q = quizData.parsedText[questionIndex];
     const selectedAnswer = selectedAnswers[questionIndex];
-    const isCorrect = selectedAnswer === question.answer;
+    const isCorrect = selectedAnswer === q.answer;
 
     return (
-      <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-        }`}>
-        {isCorrect ? (
-          <CheckCircle className="h-5 w-5" />
-        ) : (
-          <XCircle className="h-5 w-5" />
-        )}
+      <div
+        className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isCorrect ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+          }`}
+      >
+        {isCorrect ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
         <span className="font-medium">
-          {isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.answer}`}
+          {isCorrect ? "Correct!" : `Incorrect. Correct answer: ${q.answer}`}
         </span>
       </div>
     );
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <BookOpen className="h-12 w-12 mx-auto mb-4 text-primary animate-pulse" />
-              <h2 className="text-xl font-semibold mb-2">Loading Quiz...</h2>
-              <p className="text-muted-foreground">Please wait while we fetch your quiz.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <div>Loading quiz...</div>;
   }
 
-  if (!quizData || !quizData.parsedText || quizData.parsedText.length === 0) {
+  if (!quizData?.parsedText?.length) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <XCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-              <h2 className="text-xl font-semibold mb-2">No Quiz Available</h2>
-              <p className="text-muted-foreground">No quiz data found. Please try again later.</p>
-              <Button onClick={fetchQuizData} className="mt-4">
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div>
+        <p>No quiz available</p>
+        <Button onClick={fetchQuizData}>Retry</Button>
       </div>
     );
   }
 
   const currentQuestion = quizData.parsedText[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / quizData.parsedText.length) * 100;
-  const allAnswersSelected = quizData.parsedText.every((_, index) => selectedAnswers[index]);
+  const allAnswersSelected = quizData.parsedText.every((_, i) => selectedAnswers[i]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
-      {/* Header */}
-      <div className="bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-gradient-primary rounded-lg">
-              <BookOpen className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Quiz Assessment</h1>
-              <p className="text-muted-foreground">
-                Question {currentQuestionIndex + 1} of {quizData.parsedText.length}
-              </p>
-            </div>
-          </div>
+    <div className={`min-h-screen ${blur ? "blur-sm pointer-events-none" : ""}`}>
+      <video ref={videoRef} autoPlay playsInline className="hidden" />
+      <audio ref={audioRef} autoPlay className="hidden" />
 
-          {/* Progress Bar */}
-          <div className="mt-4">
-            <Progress value={progress} className="h-2" />
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-4xl mx-auto p-4 py-8">
+      <div className="max-w-4xl mx-auto p-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">
-              {currentQuestion.question}
+            <CardTitle className="flex justify-between items-center">
+              <span className="text-right">{currentQuestion?.question}</span>
+              <span>{progress / 10}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -213,45 +216,20 @@ const Quiz = () => {
             >
               {currentQuestion.options.map((option, index) => (
                 <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem
-                    value={option}
-                    id={`option-${index}`}
-                    className={isSubmitted && option === currentQuestion.answer ? 'border-green-500' : ''}
-                  />
-                  <Label
-                    htmlFor={`option-${index}`}
-                    className={`cursor-pointer ${isSubmitted && option === currentQuestion.answer
-                      ? 'text-green-600 font-medium'
-                      : ''
-                      }`}
-                  >
-                    {option}
-                  </Label>
+                  <RadioGroupItem value={option} id={`option-${index}`} />
+                  <Label htmlFor={`option-${index}`}>{option}</Label>
                 </div>
               ))}
             </RadioGroup>
-
-            {/* Answer Feedback */}
             {getAnswerFeedback(currentQuestionIndex)}
 
-            {/* Navigation */}
-            <div className="flex justify-between items-center mt-6">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentQuestionIndex === 0}
-              >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Previous
+            <div className="flex justify-between mt-6">
+              <Button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
+                <ChevronLeft className="h-4 w-4 mr-2" /> Previous
               </Button>
-
               <div className="flex gap-2">
                 {currentQuestionIndex === quizData.parsedText.length - 1 && !isSubmitted ? (
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={!allAnswersSelected}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
+                  <Button onClick={handleSubmit} disabled={!allAnswersSelected}>
                     Submit Quiz
                   </Button>
                 ) : (
@@ -259,8 +237,7 @@ const Quiz = () => {
                     onClick={handleNext}
                     disabled={currentQuestionIndex === quizData.parsedText.length - 1}
                   >
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-2" />
+                    Next <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
                 )}
               </div>
@@ -268,23 +245,24 @@ const Quiz = () => {
           </CardContent>
         </Card>
 
-        {/* Score Display */}
         {isSubmitted && score !== null && (
           <Card className="mt-6">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold mb-2">Quiz Complete!</h3>
-                <div className={`text-4xl font-bold mb-2 ${score >= 70 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
-                  {score.toFixed(1)}%
+            <CardHeader className="text-center">
+              <Link to="/">
+                <div className="flex justify-center mb-4">
+                  <div className="p-3 bg-gradient-primary rounded-xl">
+                    <Shield className="h-8 w-8 text-white" />
+                  </div>
                 </div>
-                <p className="text-muted-foreground">
-                  You got {Object.values(selectedAnswers).filter((answer, index) =>
-                    answer === quizData.parsedText[index].answer
-                  ).length} out of {quizData.parsedText.length} questions correct.
-                </p>
-              </div>
-            </CardContent>
+              </Link>
+              <CardTitle className="text-2xl font-bold">Quiz Completed</CardTitle>
+              <CardContent>
+                <div className="text-center">
+                  <div>{score.toFixed(1)}%</div>
+                  <Button>Home</Button>
+                </div>
+              </CardContent>
+            </CardHeader>
           </Card>
         )}
       </div>

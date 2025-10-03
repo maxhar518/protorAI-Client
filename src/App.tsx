@@ -28,7 +28,6 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/pdf-upload" element={<PdfUpload />} />
           <Route path="/quiz" element={<Quiz />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
