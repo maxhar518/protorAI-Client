@@ -18,6 +18,11 @@ interface QuizData {
   parsedText: Question[];
 }
 
+interface ViolationLog {
+  type: 'tab-switch' | 'fullscreen-exit';
+  timestamp: string;
+}
+
 const Quiz = () => {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -30,6 +35,11 @@ const Quiz = () => {
   const [showPermissionWarning, setShowPermissionWarning] = useState(false);
   const [permissionViolated, setPermissionViolated] = useState(false);
   const [browserSupported, setBrowserSupported] = useState(true);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [violationLog, setViolationLog] = useState<ViolationLog[]>([]);
+  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
   const { toast } = useToast();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -154,6 +164,156 @@ const Quiz = () => {
     }
   };
 
+  // Tab switching detection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !isSubmitted && permissionsGranted) {
+        setTabSwitchCount((prev) => {
+          const newCount = prev + 1;
+          const totalViolations = newCount + fullscreenExitCount;
+          
+          setViolationLog((logs) => [...logs, {
+            type: 'tab-switch',
+            timestamp: new Date().toISOString()
+          }]);
+
+          if (newCount === 1) {
+            toast({
+              title: "⚠️ Warning",
+              description: "Tab switching detected - 1st violation",
+              variant: "destructive",
+            });
+          } else if (newCount === 2) {
+            toast({
+              title: "⚠️ Warning",
+              description: "Tab switching detected - 2nd violation. One more will invalidate your exam",
+              variant: "destructive",
+            });
+          } else if (totalViolations >= 3) {
+            toast({
+              title: "⚠️ Exam Invalidated",
+              description: "Quiz submission blocked due to multiple violations",
+              variant: "destructive",
+            });
+          }
+          
+          return newCount;
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isSubmitted, permissionsGranted, fullscreenExitCount]);
+
+  // Fullscreen enforcement
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      if (!permissionsGranted || isSubmitted) return;
+      
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+          setIsFullscreen(true);
+          setShowFullscreenWarning(false);
+        }
+      } catch (error) {
+        console.error("Error entering fullscreen:", error);
+      }
+    };
+
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = document.fullscreenElement !== null;
+      setIsFullscreen(isCurrentlyFullscreen);
+
+      if (!isCurrentlyFullscreen && !isSubmitted && permissionsGranted) {
+        setShowFullscreenWarning(true);
+        
+        setFullscreenExitCount((prev) => {
+          const newCount = prev + 1;
+          const totalViolations = tabSwitchCount + newCount;
+          
+          setViolationLog((logs) => [...logs, {
+            type: 'fullscreen-exit',
+            timestamp: new Date().toISOString()
+          }]);
+
+          if (newCount === 1) {
+            toast({
+              title: "⚠️ Warning",
+              description: "Fullscreen mode exited - 1st violation",
+              variant: "destructive",
+            });
+          } else if (newCount === 2) {
+            toast({
+              title: "⚠️ Warning",
+              description: "Fullscreen mode exited - 2nd violation. One more will invalidate your exam",
+              variant: "destructive",
+            });
+          } else if (totalViolations >= 3) {
+            toast({
+              title: "⚠️ Exam Invalidated",
+              description: "Quiz submission blocked due to multiple violations",
+              variant: "destructive",
+            });
+          }
+          
+          return newCount;
+        });
+      }
+    };
+
+    if (permissionsGranted && !isSubmitted) {
+      enterFullscreen();
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [permissionsGranted, isSubmitted, tabSwitchCount]);
+
+  // Copy/Paste prevention
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      toast({
+        description: "ℹ️ Copy/paste is disabled during the exam",
+      });
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      toast({
+        description: "ℹ️ Copy/paste is disabled during the exam",
+      });
+    };
+
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      toast({
+        description: "ℹ️ Cut is disabled during the exam",
+      });
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      toast({
+        description: "ℹ️ Right-click is disabled during the exam",
+      });
+    };
+
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
+    document.addEventListener('cut', handleCut);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
+      document.removeEventListener('cut', handleCut);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
   useEffect(() => {
     fetchQuizData();
     startMedia();
@@ -181,6 +341,17 @@ const Quiz = () => {
 
   const handleSubmit = () => {
     if (!quizData) return;
+    
+    const totalViolations = tabSwitchCount + fullscreenExitCount;
+    
+    if (totalViolations >= 3) {
+      toast({
+        title: "Submission Blocked",
+        description: "Quiz cannot be submitted due to multiple proctoring violations (tab switching/fullscreen exits).",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (permissionViolated) {
       toast({
@@ -210,6 +381,11 @@ const Quiz = () => {
     setIsSubmitted(true);
 
     cleanupMedia();
+    
+    // Exit fullscreen on submit
+    if (document.exitFullscreen && document.fullscreenElement) {
+      document.exitFullscreen();
+    }
 
     toast({
       title: "Quiz Submitted!",
@@ -266,6 +442,13 @@ const Quiz = () => {
   const currentQuestion = quizData.parsedText[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / quizData.parsedText.length) * 100;
   const allAnswersSelected = quizData.parsedText.every((_, i) => selectedAnswers[i]);
+  const totalViolations = tabSwitchCount + fullscreenExitCount;
+  
+  const getViolationColor = () => {
+    if (totalViolations === 0) return "text-green-600";
+    if (totalViolations < 3) return "text-yellow-600";
+    return "text-red-600";
+  };
 
   return (
     <div className="min-h-screen relative">
@@ -273,7 +456,7 @@ const Quiz = () => {
       <audio ref={audioRef} autoPlay muted className="hidden" />
 
       {/* Permission Warning Overlay */}
-      {showPermissionWarning && (
+      {showPermissionWarning && !showFullscreenWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <Card className="w-full max-w-md mx-4 border-2 border-destructive/50 shadow-lg">
             <CardHeader className="text-center pb-4">
@@ -336,8 +519,51 @@ const Quiz = () => {
         </div>
       )}
 
+      {/* Fullscreen Warning Overlay */}
+      {showFullscreenWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4 border-2 border-yellow-500/50 shadow-lg">
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">
+                <div className="p-4 bg-yellow-500/10 rounded-full">
+                  <AlertTriangle className="h-12 w-12 text-yellow-600" />
+                </div>
+              </div>
+              <CardTitle className="text-2xl font-bold text-yellow-600">
+                Fullscreen Required
+              </CardTitle>
+              <CardDescription className="text-base mt-2">
+                Fullscreen mode is required for exam integrity. Please re-enter fullscreen to continue.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                <AlertDescription className="text-yellow-800">
+                  ⚠️ Exiting fullscreen is counted as a violation. {3 - totalViolations} warnings remaining.
+                </AlertDescription>
+              </Alert>
+
+              <Button 
+                onClick={async () => {
+                  try {
+                    await document.documentElement.requestFullscreen();
+                    setShowFullscreenWarning(false);
+                  } catch (error) {
+                    console.error("Error entering fullscreen:", error);
+                  }
+                }}
+                className="w-full bg-yellow-600 hover:bg-yellow-700"
+                size="lg"
+              >
+                Re-enter Fullscreen
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Quiz Content with Blur */}
-      <div className={`transition-all duration-300 ${!permissionsGranted ? "blur-lg pointer-events-none" : ""}`}>
+      <div className={`transition-all duration-300 ${!permissionsGranted || showFullscreenWarning ? "blur-lg pointer-events-none" : ""}`}>
 
       <div className="max-w-4xl mx-auto p-4">
         <Card>
@@ -346,20 +572,33 @@ const Quiz = () => {
               <span className="text-right">{currentQuestion?.question}</span>
               <span>{progress / 10}</span>
             </CardTitle>
+            {totalViolations > 0 && (
+              <div className="mt-2">
+                <Alert className={`border-2 ${totalViolations >= 3 ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50'}`}>
+                  <AlertTriangle className={`h-4 w-4 ${getViolationColor()}`} />
+                  <AlertDescription className={`${getViolationColor()} font-semibold`}>
+                    ⚠️ Proctoring Violations: {totalViolations}/3
+                    {totalViolations >= 3 && " - Submission Blocked"}
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            <RadioGroup
-              value={selectedAnswers[currentQuestionIndex] || ""}
-              onValueChange={handleAnswerSelect}
-              disabled={isSubmitted}
-            >
-              {currentQuestion.options.map((option, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option} id={`option-${index}`} />
-                  <Label htmlFor={`option-${index}`}>{option}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+            <div className="select-none">
+              <RadioGroup
+                value={selectedAnswers[currentQuestionIndex] || ""}
+                onValueChange={handleAnswerSelect}
+                disabled={isSubmitted}
+              >
+                {currentQuestion.options.map((option, index) => (
+                  <div key={index} className="flex items-center space-x-2 select-none">
+                    <RadioGroupItem value={option} id={`option-${index}`} />
+                    <Label htmlFor={`option-${index}`} className="select-none">{option}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
             {getAnswerFeedback(currentQuestionIndex)}
 
             <div className="flex justify-between mt-6">
@@ -368,9 +607,15 @@ const Quiz = () => {
               </Button>
               <div className="flex gap-2">
                 {currentQuestionIndex === quizData.parsedText.length - 1 && !isSubmitted ? (
-                  <Button onClick={handleSubmit} disabled={!allAnswersSelected}>
-                    Submit Quiz
-                  </Button>
+                  totalViolations >= 3 ? (
+                    <Button disabled className="bg-red-500 hover:bg-red-500">
+                      Submission Blocked - Integrity Violations
+                    </Button>
+                  ) : (
+                    <Button onClick={handleSubmit} disabled={!allAnswersSelected}>
+                      Submit Quiz
+                    </Button>
+                  )
                 ) : (
                   <Button
                     onClick={handleNext}
