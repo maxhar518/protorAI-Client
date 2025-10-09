@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { useForm } from "react-hook-form";
-import { Shield, Upload } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProfileFormData {
@@ -65,16 +65,14 @@ const Profile = () => {
         }
 
         const data = await response.json();
-        console.log(data?.response);
 
         if (data?.success) {
-          const userInfo = data?.response;
           const updatedUser = {
-            name: userInfo.name || "",
-            email: userInfo.email || "",
-            Institute: userInfo?.Institute || "",
-            phone: userInfo.phone || "",
-            avatar: userInfo.profilePicture || "",
+            name: data?.response.name || "",
+            email: data?.response.email || "",
+            Institute: data?.response?.Institute || "",
+            phone: data?.response.phone || "",
+            avatar: data?.response.profilePicture || "",
           };
 
           setUser(updatedUser);
@@ -186,7 +184,7 @@ const Profile = () => {
                 {/* Avatar Section */}
                 <div className="flex items-center gap-6">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={`http://localhost:3000${user?.avatar}`} />
+                    <AvatarImage src={`http://localhost:3000/${user?.avatar}`} />
                   </Avatar>
                   {/* File Upload Input */}
                   <div className="flex flex-col gap-2">

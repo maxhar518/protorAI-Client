@@ -54,7 +54,7 @@ const Quiz = () => {
   const startMedia = async () => {
     try {
       setPermissionsLoading(true);
-      
+
       if (!navigator.mediaDevices?.getUserMedia) {
         setBrowserSupported(false);
         setShowPermissionWarning(true);
@@ -67,7 +67,7 @@ const Quiz = () => {
         video: true,
         audio: true,
       });
-      
+
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       if (audioRef.current) audioRef.current.srcObject = stream;
@@ -86,14 +86,14 @@ const Quiz = () => {
 
         const videoTracks = streamRef.current.getVideoTracks();
         const audioTracks = streamRef.current.getAudioTracks();
-        
+
         const videoEnabled = videoTracks.some((t) => t.enabled && t.readyState === 'live');
         const audioEnabled = audioTracks.some((t) => t.enabled && t.readyState === 'live');
-        
+
         const bothEnabled = videoEnabled && audioEnabled;
         setPermissionsGranted(bothEnabled);
         setShowPermissionWarning(!bothEnabled);
-        
+
         if (!bothEnabled && !isSubmitted) {
           setPermissionViolated(true);
         }
@@ -101,14 +101,14 @@ const Quiz = () => {
 
       validateTracks();
       intervalRef.current = setInterval(validateTracks, 2000);
-      
+
     } catch (error) {
       console.error("Error accessing media devices:", error);
       setPermissionsGranted(false);
       setShowPermissionWarning(true);
       setPermissionsLoading(false);
       setPermissionViolated(true);
-      
+
       toast({
         title: "Permission Denied",
         description: "Camera and microphone access are required for the quiz.",
@@ -288,7 +288,7 @@ const Quiz = () => {
         setTabSwitchCount((prev) => {
           const newCount = prev + 1;
           const totalViolations = newCount + fullscreenExitCount;
-          
+
           setViolationLog((logs) => [...logs, {
             type: 'tab-switch',
             timestamp: new Date().toISOString()
@@ -313,7 +313,7 @@ const Quiz = () => {
               variant: "destructive",
             });
           }
-          
+
           return newCount;
         });
       }
@@ -327,7 +327,7 @@ const Quiz = () => {
   useEffect(() => {
     const enterFullscreen = async () => {
       if (!permissionsGranted || isSubmitted) return;
-      
+
       try {
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
@@ -345,11 +345,11 @@ const Quiz = () => {
 
       if (!isCurrentlyFullscreen && !isSubmitted && permissionsGranted) {
         setShowFullscreenWarning(true);
-        
+
         setFullscreenExitCount((prev) => {
           const newCount = prev + 1;
           const totalViolations = tabSwitchCount + newCount;
-          
+
           setViolationLog((logs) => [...logs, {
             type: 'fullscreen-exit',
             timestamp: new Date().toISOString()
@@ -374,7 +374,7 @@ const Quiz = () => {
               variant: "destructive",
             });
           }
-          
+
           return newCount;
         });
       }
@@ -485,9 +485,9 @@ const Quiz = () => {
 
   const handleSubmit = async () => {
     if (!quizData) return;
-    
+
     const totalViolations = tabSwitchCount + fullscreenExitCount;
-    
+
     if (totalViolations >= 3) {
       toast({
         title: "Submission Blocked",
@@ -497,7 +497,7 @@ const Quiz = () => {
       await exportViolationLog();
       return;
     }
-    
+
     if (permissionViolated) {
       toast({
         title: "Submission Blocked",
@@ -527,7 +527,7 @@ const Quiz = () => {
     setIsSubmitted(true);
 
     cleanupMedia();
-    
+
     // Exit fullscreen on submit
     if (document.exitFullscreen && document.fullscreenElement) {
       document.exitFullscreen();
@@ -550,10 +550,7 @@ const Quiz = () => {
     const isCorrect = selectedAnswer === q.answer;
 
     return (
-      <div
-        className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isCorrect ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-          }`}
-      >
+      <div className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${isCorrect ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
         {isCorrect ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
         <span className="font-medium">
           {isCorrect ? "Correct!" : `Incorrect. Correct answer: ${q.answer}`}
@@ -581,8 +578,8 @@ const Quiz = () => {
 
   if (!quizData?.parsedText?.length) {
     return (
-      <div>
-        <p>No quiz available</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <p>No quiz available</p><br />
         <Button onClick={fetchQuizData}>Retry</Button>
       </div>
     );
@@ -592,7 +589,7 @@ const Quiz = () => {
   const progress = ((currentQuestionIndex + 1) / quizData.parsedText.length) * 100;
   const allAnswersSelected = quizData.parsedText.every((_, i) => selectedAnswers[i]);
   const totalViolations = tabSwitchCount + fullscreenExitCount;
-  
+
   const getViolationColor = () => {
     if (totalViolations === 0) return "text-green-600";
     if (totalViolations < 3) return "text-yellow-600";
@@ -619,7 +616,7 @@ const Quiz = () => {
                 Access Required
               </CardTitle>
               <CardDescription className="text-base mt-2">
-                {!browserSupported 
+                {!browserSupported
                   ? "Your browser doesn't support camera and microphone access."
                   : "Camera and microphone access are required for exam integrity and proctoring."
                 }
@@ -640,7 +637,7 @@ const Quiz = () => {
                   </div>
                 </AlertDescription>
               </Alert>
-              
+
               {permissionViolated && (
                 <Alert variant="destructive">
                   <AlertDescription>
@@ -650,15 +647,15 @@ const Quiz = () => {
               )}
 
               {browserSupported && (
-                <Button 
-                  onClick={startMedia} 
+                <Button
+                  onClick={startMedia}
                   className="w-full bg-destructive hover:bg-destructive/90"
                   size="lg"
                 >
                   Grant Permissions
                 </Button>
               )}
-              
+
               {!browserSupported && (
                 <p className="text-sm text-muted-foreground text-center">
                   Please use a modern browser (Chrome, Firefox, Safari, or Edge) to take this quiz.
@@ -693,7 +690,7 @@ const Quiz = () => {
                 </AlertDescription>
               </Alert>
 
-              <Button 
+              <Button
                 onClick={async () => {
                   try {
                     await document.documentElement.requestFullscreen();
@@ -715,7 +712,7 @@ const Quiz = () => {
       {/* Quiz Content with Blur */}
       <div className={`transition-all duration-300 ${!permissionsGranted || showFullscreenWarning ? "blur-lg pointer-events-none" : ""}`}>
 
-      <div className="max-w-4xl mx-auto p-4">
+        <div className="max-w-4xl mx-auto p-4">
         {/* Recording Indicator */}
         {permissionsGranted && !isSubmitted && (
           <div className="mb-4 flex justify-between items-center bg-card border rounded-lg p-3 shadow-sm">
@@ -735,90 +732,85 @@ const Quiz = () => {
           </div>
         )}
         
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex justify-between items-center">
-              <span className="text-right">{currentQuestion?.question}</span>
-              <span>{progress / 10}</span>
-            </CardTitle>
-            {totalViolations > 0 && (
-              <div className="mt-2">
-                <Alert className={`border-2 ${totalViolations >= 3 ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50'}`}>
-                  <AlertTriangle className={`h-4 w-4 ${getViolationColor()}`} />
-                  <AlertDescription className={`${getViolationColor()} font-semibold`}>
-                    ⚠️ Proctoring Violations: {totalViolations}/3
-                    {totalViolations >= 3 && " - Submission Blocked"}
-                  </AlertDescription>
-                </Alert>
-              </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="select-none">
-              <RadioGroup
-                value={selectedAnswers[currentQuestionIndex] || ""}
-                onValueChange={handleAnswerSelect}
-                disabled={isSubmitted}
-              >
-                {currentQuestion.options.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2 select-none">
-                    <RadioGroupItem value={option} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="select-none">{option}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-            {getAnswerFeedback(currentQuestionIndex)}
-
-            <div className="flex justify-between mt-6">
-              <Button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
-                <ChevronLeft className="h-4 w-4 mr-2" /> Previous
-              </Button>
-              <div className="flex gap-2">
-                {currentQuestionIndex === quizData.parsedText.length - 1 && !isSubmitted ? (
-                  totalViolations >= 3 ? (
-                    <Button disabled className="bg-red-500 hover:bg-red-500">
-                      Submission Blocked - Integrity Violations
-                    </Button>
-                  ) : (
-                    <Button onClick={handleSubmit} disabled={!allAnswersSelected}>
-                      Submit Quiz
-                    </Button>
-                  )
-                ) : (
-                  <Button
-                    onClick={handleNext}
-                    disabled={currentQuestionIndex === quizData.parsedText.length - 1}
-                  >
-                    Next <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {isSubmitted && score !== null && (
-          <Card className="mt-6">
-            <CardHeader className="text-center">
-              <Link to="/">
-                <div className="flex justify-center mb-4">
-                  <div className="p-3 bg-gradient-primary rounded-xl">
-                    <Shield className="h-8 w-8 text-white" />
-                  </div>
+          <Card className="justify-between items-center">
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                <span className="text-right">{currentQuestion?.question}</span>
+                <span>{progress / 10}</span>
+              </CardTitle>
+              {totalViolations > 0 && (
+                <div className="mt-2">
+                  <Alert className={`border-2 ${totalViolations >= 3 ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50'}`}>
+                    <AlertTriangle className={`h-4 w-4 ${getViolationColor()}`} />
+                    <AlertDescription className={`${getViolationColor()} font-semibold`}>
+                      ⚠️ Proctoring Violations: {totalViolations}/3
+                      {totalViolations >= 3 && " - Submission Blocked"}
+                    </AlertDescription>
+                  </Alert>
                 </div>
-              </Link>
-              <CardTitle className="text-2xl font-bold">Quiz Completed</CardTitle>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="select-none">
+                <RadioGroup
+                  value={selectedAnswers[currentQuestionIndex] || ""}
+                  onValueChange={handleAnswerSelect}
+                  disabled={isSubmitted}
+                >
+                  {currentQuestion.options.map((option, index) => (
+                    <div key={index} className="flex items-center space-x-2 select-none">
+                      <RadioGroupItem value={option} id={`option-${index}`} />
+                      <Label htmlFor={`option-${index}`} className="select-none">{option}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {getAnswerFeedback(currentQuestionIndex)}
+
+              <div className="flex justify-between mt-6">
+                <Button onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
+                  <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                </Button>
+                <div className="flex gap-2">
+                  {currentQuestionIndex === quizData.parsedText.length - 1 && !isSubmitted ? (
+                    totalViolations >= 3 ? (
+                      <Button disabled className="bg-red-500 hover:bg-red-500">
+                        Submission Blocked - Integrity Violations
+                      </Button>
+                    ) : (
+                      <Button onClick={handleSubmit} disabled={!allAnswersSelected}>
+                        Submit Quiz
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      onClick={handleNext}
+                      disabled={currentQuestionIndex === quizData.parsedText.length - 1}
+                    >
+                      Next <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {isSubmitted && score !== null && (
+            <Card className="mt-6">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl font-bold">Quiz Completed</CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="text-center">
-                  <div>{score.toFixed(1)}%</div>
-                  <Button>Home</Button>
+                  <div className="font-bold">{score.toFixed(1)}%</div> <br />
+                  <Link to="/">
+                    <Button>Home</Button>
+                  </Link>
                 </div>
               </CardContent>
-            </CardHeader>
-          </Card>
-        )}
-      </div>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
