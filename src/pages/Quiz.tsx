@@ -40,12 +40,16 @@ const Quiz = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [violationLog, setViolationLog] = useState<ViolationLog[]>([]);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
+  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [imageCaptureFailures, setImageCaptureFailures] = useState(0);
   const { toast } = useToast();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const captureIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const startMedia = async () => {
     try {
@@ -115,9 +119,122 @@ const Quiz = () => {
 
   const cleanupMedia = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
+    if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+  };
+
+  const captureImage = (): string | null => {
+    try {
+      if (!videoRef.current || !canvasRef.current) return null;
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      if (!context) return null;
+      
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      return canvas.toDataURL('image/jpeg', 0.7);
+    } catch (error) {
+      console.error('Error capturing image:', error);
+      return null;
+    }
+  };
+
+  const sendImageToBackend = async (imageData: string, retryCount = 0) => {
+    try {
+      const payload = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        questionIndex: currentQuestionIndex,
+        imageData,
+      };
+
+      // Prepare for backend endpoint (currently logging only)
+      console.log('📸 Image captured for proctoring:', {
+        sessionId: payload.sessionId,
+        timestamp: payload.timestamp,
+        questionIndex: payload.questionIndex,
+        imageSize: `${(imageData.length / 1024).toFixed(2)} KB`,
+      });
+
+      // Backend endpoint would be: POST http://localhost:3000/proctoring/capture
+      // Uncomment when backend is ready:
+      /*
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:3000/proctoring/capture", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend error: ${response.status}`);
+      }
+      */
+
+      setImageCaptureFailures(0);
+    } catch (error) {
+      console.error('Error sending image to backend:', error);
+      setImageCaptureFailures((prev) => prev + 1);
+      
+      if (retryCount < 2) {
+        setTimeout(() => sendImageToBackend(imageData, retryCount + 1), 2000);
+      }
+    }
+  };
+
+  const exportViolationLog = async () => {
+    try {
+      const exportData = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        totalViolations: tabSwitchCount + fullscreenExitCount,
+        tabSwitchCount,
+        fullscreenExitCount,
+        violationLog,
+        permissionViolated,
+        quizCompleted: isSubmitted,
+        score: score || null,
+      };
+
+      console.log('📊 Violation log exported:', JSON.stringify(exportData, null, 2));
+
+      // Backend endpoint would be: POST http://localhost:3000/proctoring/violations
+      // Uncomment when backend is ready:
+      /*
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:3000/proctoring/violations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(exportData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend error: ${response.status}`);
+      }
+      */
+
+      // Store in localStorage as backup
+      localStorage.setItem(`violation-log-${sessionId}`, JSON.stringify(exportData));
+      
+      toast({
+        description: "✅ Proctoring data saved successfully",
+      });
+    } catch (error) {
+      console.error('Error exporting violation log:', error);
     }
   };
 
@@ -317,8 +434,35 @@ const Quiz = () => {
   useEffect(() => {
     fetchQuizData();
     startMedia();
-    return () => cleanupMedia();
+    return () => {
+      cleanupMedia();
+      exportViolationLog();
+    };
   }, []);
+
+  // Image capture every 4 seconds
+  useEffect(() => {
+    if (!permissionsGranted || isSubmitted) return;
+
+    const startImageCapture = () => {
+      captureIntervalRef.current = setInterval(() => {
+        const imageData = captureImage();
+        if (imageData) {
+          sendImageToBackend(imageData);
+        } else {
+          console.warn('Failed to capture image from video feed');
+        }
+      }, 4000);
+    };
+
+    startImageCapture();
+
+    return () => {
+      if (captureIntervalRef.current) {
+        clearInterval(captureIntervalRef.current);
+      }
+    };
+  }, [permissionsGranted, isSubmitted, currentQuestionIndex]);
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswers((prev) => ({
@@ -339,7 +483,7 @@ const Quiz = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!quizData) return;
     
     const totalViolations = tabSwitchCount + fullscreenExitCount;
@@ -350,6 +494,7 @@ const Quiz = () => {
         description: "Quiz cannot be submitted due to multiple proctoring violations (tab switching/fullscreen exits).",
         variant: "destructive",
       });
+      await exportViolationLog();
       return;
     }
     
@@ -359,6 +504,7 @@ const Quiz = () => {
         description: "Quiz cannot be submitted due to permission violations during the exam.",
         variant: "destructive",
       });
+      await exportViolationLog();
       return;
     }
 
@@ -386,6 +532,9 @@ const Quiz = () => {
     if (document.exitFullscreen && document.fullscreenElement) {
       document.exitFullscreen();
     }
+
+    // Export violation log to backend
+    await exportViolationLog();
 
     toast({
       title: "Quiz Submitted!",
@@ -454,6 +603,7 @@ const Quiz = () => {
     <div className="min-h-screen relative">
       <video ref={videoRef} autoPlay playsInline muted className="hidden" />
       <audio ref={audioRef} autoPlay muted className="hidden" />
+      <canvas ref={canvasRef} className="hidden" />
 
       {/* Permission Warning Overlay */}
       {showPermissionWarning && !showFullscreenWarning && (
@@ -566,6 +716,25 @@ const Quiz = () => {
       <div className={`transition-all duration-300 ${!permissionsGranted || showFullscreenWarning ? "blur-lg pointer-events-none" : ""}`}>
 
       <div className="max-w-4xl mx-auto p-4">
+        {/* Recording Indicator */}
+        {permissionsGranted && !isSubmitted && (
+          <div className="mb-4 flex justify-between items-center bg-card border rounded-lg p-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">Recording Active</span>
+              </div>
+              <span className="text-xs text-muted-foreground ml-4">Session: {sessionId}</span>
+            </div>
+            {imageCaptureFailures > 0 && (
+              <span className="text-xs text-yellow-600">⚠️ {imageCaptureFailures} capture failures</span>
+            )}
+          </div>
+        )}
+        
         <Card>
           <CardHeader>
             <CardTitle className="flex justify-between items-center">
