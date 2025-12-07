@@ -129,17 +129,22 @@ const Quiz = () => {
   const captureImage = (): string | null => {
     try {
       if (!videoRef.current || !canvasRef.current) return null;
-      
+
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
-      
+
+      if (video.readyState !== 4) {
+        console.warn("Video not ready for capture");
+        return null;
+      }
+
       if (!context) return null;
-      
+
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
+
       return canvas.toDataURL('image/jpeg', 0.7);
     } catch (error) {
       console.error('Error capturing image:', error);
@@ -164,11 +169,8 @@ const Quiz = () => {
         imageSize: `${(imageData.length / 1024).toFixed(2)} KB`,
       });
 
-      // Backend endpoint would be: POST http://localhost:3000/proctoring/capture
-      // Uncomment when backend is ready:
-      /*
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:3000/proctoring/capture", {
+      const response = await fetch("http://localhost:3000/exam/DetectLogs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -180,13 +182,12 @@ const Quiz = () => {
       if (!response.ok) {
         throw new Error(`Backend error: ${response.status}`);
       }
-      */
 
       setImageCaptureFailures(0);
     } catch (error) {
       console.error('Error sending image to backend:', error);
       setImageCaptureFailures((prev) => prev + 1);
-      
+
       if (retryCount < 2) {
         setTimeout(() => sendImageToBackend(imageData, retryCount + 1), 2000);
       }
@@ -229,7 +230,7 @@ const Quiz = () => {
 
       // Store in localStorage as backup
       localStorage.setItem(`violation-log-${sessionId}`, JSON.stringify(exportData));
-      
+
       toast({
         description: "✅ Proctoring data saved successfully",
       });
@@ -444,25 +445,40 @@ const Quiz = () => {
   useEffect(() => {
     if (!permissionsGranted || isSubmitted) return;
 
+    const video = videoRef.current;
+    if (!video) return;
+
+    let hasStartedCapture = false;
+
     const startImageCapture = () => {
+      if (hasStartedCapture) return; // prevent duplicates
+      hasStartedCapture = true;
+
+      console.log("Starting auto-capture interval...");
+
       captureIntervalRef.current = setInterval(() => {
         const imageData = captureImage();
         if (imageData) {
           sendImageToBackend(imageData);
         } else {
-          console.warn('Failed to capture image from video feed');
+          console.warn("Failed to capture image from video feed");
         }
       }, 4000);
     };
 
-    startImageCapture();
+    const handleLoadedData = () => {
+      // Video is fully ready (has a rendered frame)
+      console.log(video.videoWidth, video.videoHeight, video.readyState);
+      startImageCapture();
+    };
+
+    video.addEventListener("loadeddata", handleLoadedData);
 
     return () => {
-      if (captureIntervalRef.current) {
-        clearInterval(captureIntervalRef.current);
-      }
+      video.removeEventListener("loadeddata", handleLoadedData);
+      if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
     };
-  }, [permissionsGranted, isSubmitted, currentQuestionIndex]);
+  }, [permissionsGranted, isSubmitted]);
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswers((prev) => ({
@@ -578,11 +594,13 @@ const Quiz = () => {
 
   if (!quizData?.parsedText?.length) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>No quiz available</p><br />
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p>No quiz available</p>
+        <br />
         <Button onClick={fetchQuizData}>Retry</Button>
       </div>
     );
+
   }
 
   const currentQuestion = quizData.parsedText[currentQuestionIndex];
@@ -713,25 +731,25 @@ const Quiz = () => {
       <div className={`transition-all duration-300 ${!permissionsGranted || showFullscreenWarning ? "blur-lg pointer-events-none" : ""}`}>
 
         <div className="max-w-4xl mx-auto p-4">
-        {/* Recording Indicator */}
-        {permissionsGranted && !isSubmitted && (
-          <div className="mb-4 flex justify-between items-center bg-card border rounded-lg p-3 shadow-sm">
-            <div className="flex items-center gap-2">
+          {/* Recording Indicator */}
+          {permissionsGranted && !isSubmitted && (
+            <div className="mb-4 flex justify-between items-center bg-card border rounded-lg p-3 shadow-sm">
               <div className="flex items-center gap-2">
-                <div className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">Recording Active</span>
                 </div>
-                <span className="text-sm font-medium text-muted-foreground">Recording Active</span>
+                <span className="text-xs text-muted-foreground ml-4">Session: {sessionId}</span>
               </div>
-              <span className="text-xs text-muted-foreground ml-4">Session: {sessionId}</span>
+              {imageCaptureFailures > 0 && (
+                <span className="text-xs text-yellow-600">⚠️ {imageCaptureFailures} capture failures</span>
+              )}
             </div>
-            {imageCaptureFailures > 0 && (
-              <span className="text-xs text-yellow-600">⚠️ {imageCaptureFailures} capture failures</span>
-            )}
-          </div>
-        )}
-        
+          )}
+
           <Card className="justify-between items-center">
             <CardHeader>
               <CardTitle className="flex justify-between items-center">
