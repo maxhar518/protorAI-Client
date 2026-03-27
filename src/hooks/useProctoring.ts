@@ -59,8 +59,8 @@ export const useProctoring = ({ isSubmitted, currentQuestionIndex }: UseProctori
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const captureIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const totalViolations = tabSwitchCount + fullscreenExitCount;

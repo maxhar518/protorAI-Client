@@ -9,11 +9,8 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", href: "#home" },
-    { name: "Features", href: "#features" },
     { name: "Quiz", href: "/quiz" },
     { name: "PDF Upload", href: "/pdf-upload" },
-    { name: "About", href: "#about" },
-    { name: "Contact", href: "#contact" },
   ];
   const token = localStorage.getItem('token');
 
